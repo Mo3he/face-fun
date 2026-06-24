@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Face Fun</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Face Fun</h1>
+    <div class="status">
+      <span id="conn-dot" class="dot"></span>
+      <span id="conn-text">Connecting…</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="video-panel">
+      <div class="video-wrap">
+        <img id="stream" src="/video_feed" alt="Live camera stream" />
+      </div>
+
+      <div class="recognised">
+        <strong>In view:</strong>
+        <span id="labels">nobody yet</span>
+      </div>
+
+      <div class="controls">
+        <form id="enroll-form" class="row">
+          <input id="enroll-name" type="text" placeholder="Type your name" maxlength="40" />
+          <button type="submit">Enroll my face</button>
+        </form>
+        <button id="snap" class="primary">Take photo</button>
+      </div>
+      <p class="hint">
+        Enroll your face, then try on glasses, a hat or a fake beard. When the
+        recognizer loses you, the box turns red and shows <em>Unknown</em>.
+      </p>
+      <p id="message" class="message"></p>
+    </section>
+
+    <section class="gallery-panel">
+      <h2>Photos</h2>
+      <div class="gallery-actions">
+        <button id="select-all" class="ghost">Select all</button>
+        <button id="clear-sel" class="ghost">Clear</button>
+      </div>
+      <div id="gallery" class="gallery"></div>
+
+      <form id="email-form" class="email-box">
+        <label for="email">Email selected photos to yourself</label>
+        <div class="row">
+          <input id="email" type="email" placeholder="you@example.com" required />
+          <button type="submit" class="primary">Send</button>
+        </div>
+      </form>
+      <p id="email-message" class="message"></p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <a href="/admin">Admin settings</a>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

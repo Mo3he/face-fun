@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Face Fun - Admin</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Face Fun - Admin</h1>
+    <a class="back" href="/">Back to app</a>
+  </header>
+
+  <main class="admin">
+    <form id="settings-form">
+      <fieldset>
+        <legend>Camera (RTSP)</legend>
+        <label>RTSP URL
+          <input name="rtsp_url" type="text"
+                 placeholder="rtsp://user:pass@camera-ip/axis-media/media.amp" />
+        </label>
+        <p class="hint">For Axis cameras this is typically
+          <code>rtsp://&lt;user&gt;:&lt;pass&gt;@&lt;ip&gt;/axis-media/media.amp</code>.
+        </p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Recognition tuning</legend>
+        <label>Match tolerance (lower = stricter)
+          <input name="recognition_tolerance" type="number" step="0.05" min="0.1" max="1.0" />
+        </label>
+        <label>Run detection every N frames
+          <input name="detect_every" type="number" step="1" min="1" max="30" />
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Email (SMTP)</legend>
+        <label>SMTP host <input name="smtp_host" type="text" placeholder="smtp.example.com" /></label>
+        <label>SMTP port <input name="smtp_port" type="number" placeholder="587" /></label>
+        <label>SMTP username <input name="smtp_user" type="text" autocomplete="off" /></label>
+        <label>SMTP password <input name="smtp_password" type="password" autocomplete="new-password" /></label>
+        <label>From address <input name="smtp_from" type="text" placeholder="facefun@example.com" /></label>
+        <label class="checkbox">
+          <input name="smtp_use_tls" type="checkbox" /> Use STARTTLS (uncheck for port 465 / implicit SSL)
+        </label>
+      </fieldset>
+
+      <div class="row">
+        <button type="submit" class="primary">Save settings</button>
+      </div>
+      <p id="settings-message" class="message"></p>
+    </form>
+
+    <section class="admin-section">
+      <h2>Send a test email</h2>
+      <form id="test-email-form" class="row">
+        <input id="test-recipient" type="email" placeholder="you@example.com" required />
+        <button type="submit">Send test</button>
+      </form>
+      <p id="test-message" class="message"></p>
+    </section>
+
+    <section class="admin-section">
+      <h2>Enrolled faces</h2>
+      <ul id="faces-list" class="faces-list"></ul>
+    </section>
+  </main>
+
+  <script src="/static/admin.js"></script>
+</body>
+</html>

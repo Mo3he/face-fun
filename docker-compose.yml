@@ -1,0 +1,23 @@
+services:
+  face-fun:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Admin credentials for the locked settings tab (change these!).
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+      # Optional initial values; everything is editable later from /admin.
+      RTSP_URL: ${RTSP_URL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+    volumes:
+      - facefun-data:/data
+    restart: unless-stopped
+
+volumes:
+  facefun-data:
