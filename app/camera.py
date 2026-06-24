@@ -10,17 +10,24 @@ from __future__ import annotations
 
 import threading
 import time
+import uuid
 
 import cv2
 import face_recognition
 import numpy as np
 
+from . import config
 from .config import Settings
+from .database import Database
 from .faces import FaceStore, recognition_lock
 
 # Scale frames down before running detection. 0.25 => quarter size, which is a
 # good speed/accuracy trade-off for typical RTSP resolutions.
 DETECT_SCALE = 0.25
+
+# Minimum seconds between auto-saved crops of the same label, so a face that
+# lingers in view does not flood the captures gallery.
+CAPTURE_COOLDOWN = 30.0
 
 
 class Detection:
@@ -31,9 +38,10 @@ class Detection:
 
 
 class Camera:
-    def __init__(self, settings: Settings, face_store: FaceStore) -> None:
+    def __init__(self, settings: Settings, face_store: FaceStore, database: Database) -> None:
         self._settings = settings
         self._faces = face_store
+        self._database = database
         self._lock = threading.Lock()
         self._jpeg: bytes | None = None
         self._raw: np.ndarray | None = None
@@ -41,6 +49,10 @@ class Camera:
         self._running = False
         self._thread: threading.Thread | None = None
         self._generation = 0  # bumped on restart so the loop reconnects
+        # Auto-capture bookkeeping: labels present in the previous detection
+        # cycle and the last time each label was saved.
+        self._prev_labels: set[str] = set()
+        self._last_capture: dict[str, float] = {}
         self.connected = False
         self.last_error = ""
 
@@ -109,6 +121,7 @@ class Camera:
             detect_every = max(1, int(self._settings.get("detect_every", 5)))
             if frame_index % detect_every == 0:
                 self._detections = self._detect(frame)
+                self._maybe_capture(frame, self._detections)
             frame_index += 1
 
             annotated = self._annotate(frame, self._detections)
@@ -169,6 +182,48 @@ class Camera:
             with self._lock:
                 self._jpeg = buffer.tobytes()
 
+    # ---- auto capture --------------------------------------------------
+    @staticmethod
+    def _crop_face(frame: np.ndarray, d: "Detection") -> np.ndarray | None:
+        """Return a margin-padded crop of the detected face, or None."""
+        h, w = frame.shape[:2]
+        margin_y = int((d.bottom - d.top) * 0.25)
+        margin_x = int((d.right - d.left) * 0.25)
+        top = max(0, d.top - margin_y)
+        bottom = min(h, d.bottom + margin_y)
+        left = max(0, d.left - margin_x)
+        right = min(w, d.right + margin_x)
+        if bottom <= top or right <= left:
+            return None
+        crop = frame[top:bottom, left:right]
+        return crop if crop.size else None
+
+    def _maybe_capture(self, frame: np.ndarray, detections: list["Detection"]) -> None:
+        """Save a cropped image when a face newly appears in view."""
+        now = time.time()
+        current = {d.name for d in detections}
+        new_labels = current - self._prev_labels
+        self._prev_labels = current
+        for d in detections:
+            if d.name not in new_labels:
+                continue
+            last = self._last_capture.get(d.name, 0.0)
+            if now - last < CAPTURE_COOLDOWN:
+                continue
+            crop = self._crop_face(frame, d)
+            if crop is None:
+                continue
+            ok, buffer = cv2.imencode(".jpg", crop, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+            if not ok:
+                continue
+            filename = f"{int(now)}_{uuid.uuid4().hex[:8]}.jpg"
+            try:
+                (config.CAPTURES_DIR / filename).write_bytes(buffer.tobytes())
+                self._database.add_capture(filename, d.name)
+            except OSError:
+                continue
+            self._last_capture[d.name] = now
+
     # ---- consumers -----------------------------------------------------
     def get_jpeg(self) -> bytes | None:
         with self._lock:
@@ -196,8 +251,27 @@ class Camera:
             encodings = face_recognition.face_encodings(rgb, [largest])
         if not encodings:
             return False, "Could not compute a face encoding. Try again."
-        self._faces.enroll(name, encodings[0])
+        image = self._save_enroll_thumb(frame, largest)
+        self._faces.enroll(name, encodings[0], image)
         return True, f"Enrolled {name}."
+
+    @staticmethod
+    def _save_enroll_thumb(frame: np.ndarray, location: tuple[int, int, int, int]) -> str | None:
+        """Save a cropped thumbnail of an enrolled face. Returns the filename."""
+        top, right, bottom, left = location
+        d = Detection(top, right, bottom, left, "")
+        crop = Camera._crop_face(frame, d)
+        if crop is None:
+            return None
+        ok, buffer = cv2.imencode(".jpg", crop, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+        if not ok:
+            return None
+        filename = f"{int(time.time())}_{uuid.uuid4().hex[:8]}.jpg"
+        try:
+            (config.FACES_DIR / filename).write_bytes(buffer.tobytes())
+        except OSError:
+            return None
+        return filename
 
     def capture_annotated_jpeg(self) -> bytes | None:
         """Return a freshly annotated JPEG of the current frame for a photo."""

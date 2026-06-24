@@ -33,8 +33,8 @@ class FaceStore:
         with self._lock:
             self._ids, self._names, self._encodings = ids, names, encs
 
-    def enroll(self, name: str, encoding: np.ndarray) -> int:
-        face_id = self._db.add_face(name, encoding)
+    def enroll(self, name: str, encoding: np.ndarray, image: str | None = None) -> int:
+        face_id = self._db.add_face(name, encoding, image)
         self.reload()
         return face_id
 

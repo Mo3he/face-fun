@@ -1,9 +1,11 @@
 """Face Fun - FastAPI application wiring the camera, recognition and web UI."""
 from __future__ import annotations
 
+import io
 import re
 import time
 import uuid
+import zipfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -12,13 +14,14 @@ from fastapi.responses import (
     FileResponse,
     HTMLResponse,
     JSONResponse,
+    Response,
     StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from . import config
-from .auth import require_admin
+from .auth import create_session, destroy_session, require_admin, verify_credentials
 from .camera import Camera
 from .config import Settings
 from .database import Database
@@ -30,7 +33,7 @@ BASE_DIR = Path(__file__).resolve().parent
 settings = Settings()
 database = Database(config.DB_FILE)
 face_store = FaceStore(database)
-camera = Camera(settings, face_store)
+camera = Camera(settings, face_store, database)
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9 _\-]")
@@ -57,7 +60,9 @@ def index(request: Request):
 
 
 @app.get("/admin", response_class=HTMLResponse)
-def admin_page(request: Request, _: str = Depends(require_admin)):
+def admin_page(request: Request):
+    # The page itself is a shell; it gates every action behind a fresh login
+    # and only loads admin data after the user authenticates.
     return templates.TemplateResponse("admin.html", {"request": request})
 
 
@@ -183,8 +188,21 @@ def email_photos(recipient: str = Form(...), photo_ids: str = Form(...)):
 
 
 # --------------------------------------------------------------------------
-# Admin API (locked behind HTTP Basic auth)
+# Admin API (locked behind a session token)
 # --------------------------------------------------------------------------
+@app.post("/admin/login")
+def admin_login(username: str = Form(...), password: str = Form(...)):
+    if not verify_credentials(username, password):
+        raise HTTPException(status_code=401, detail="Invalid administrator credentials.")
+    return {"ok": True, "token": create_session()}
+
+
+@app.post("/admin/logout")
+def admin_logout(token: str = Depends(require_admin)):
+    destroy_session(token)
+    return {"ok": True}
+
+
 @app.get("/admin/settings")
 def get_settings(_: str = Depends(require_admin)):
     return settings.public()
@@ -216,5 +234,78 @@ def admin_test_email(recipient: str = Form(...), _: str = Depends(require_admin)
 
 @app.delete("/admin/faces/{face_id}")
 def admin_delete_face(face_id: int, _: str = Depends(require_admin)):
+    record = database.get_face(face_id)
     face_store.delete(face_id)
+    if record and record.get("image"):
+        target = config.FACES_DIR / Path(record["image"]).name
+        if target.exists():
+            target.unlink()
     return {"ok": True}
+
+
+@app.get("/admin/faces")
+def admin_list_faces(_: str = Depends(require_admin)):
+    return database.list_faces()
+
+
+@app.get("/faces/image/{filename}")
+def get_face_image(filename: str):
+    safe = Path(filename).name  # strip any path traversal
+    path = config.FACES_DIR / safe
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Image not found.")
+    return FileResponse(path, media_type="image/jpeg")
+
+
+# --------------------------------------------------------------------------
+# Captures (auto-saved cropped faces, managed from the admin tab)
+# --------------------------------------------------------------------------
+@app.get("/admin/captures")
+def admin_list_captures(_: str = Depends(require_admin)):
+    return database.list_captures()
+
+
+@app.delete("/admin/captures/{capture_id}")
+def admin_delete_capture(capture_id: int, _: str = Depends(require_admin)):
+    filename = database.delete_capture(capture_id)
+    if filename is None:
+        raise HTTPException(status_code=404, detail="Capture not found.")
+    target = config.CAPTURES_DIR / Path(filename).name
+    if target.exists():
+        target.unlink()
+    return {"ok": True}
+
+
+@app.post("/admin/captures/download")
+async def admin_download_captures(request: Request, _: str = Depends(require_admin)):
+    payload = await request.json()
+    raw_ids = payload.get("ids") if isinstance(payload, dict) else None
+    try:
+        ids = [int(x) for x in (raw_ids or [])]
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid selection.")
+    if not ids:
+        raise HTTPException(status_code=400, detail="Select at least one capture.")
+    records = database.get_captures(ids)
+    if not records:
+        raise HTTPException(status_code=404, detail="No captures found.")
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for record in records:
+            path = config.CAPTURES_DIR / Path(record["filename"]).name
+            if path.exists():
+                archive.write(path, arcname=record["filename"])
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=captures.zip"},
+    )
+
+
+@app.get("/captures/{filename}")
+def get_capture(filename: str):
+    safe = Path(filename).name  # strip any path traversal
+    path = config.CAPTURES_DIR / safe
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Capture not found.")
+    return FileResponse(path, media_type="image/jpeg")

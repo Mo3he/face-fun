@@ -15,6 +15,10 @@ from typing import Any
 
 DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 PHOTOS_DIR = DATA_DIR / "photos"
+# Auto-saved cropped images of faces as they are detected on the stream.
+CAPTURES_DIR = DATA_DIR / "captures"
+# Thumbnail crops saved when a face is enrolled.
+FACES_DIR = DATA_DIR / "faces"
 SETTINGS_FILE = DATA_DIR / "settings.json"
 DB_FILE = DATA_DIR / "facefun.db"
 
@@ -54,6 +58,8 @@ class Settings:
     def _load(self) -> None:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
+        CAPTURES_DIR.mkdir(parents=True, exist_ok=True)
+        FACES_DIR.mkdir(parents=True, exist_ok=True)
         if SETTINGS_FILE.exists():
             try:
                 stored = json.loads(SETTINGS_FILE.read_text())

@@ -9,10 +9,28 @@
 <body>
   <header class="topbar">
     <h1>Face Fun - Admin</h1>
-    <a class="back" href="/">Back to app</a>
+    <div class="topbar-actions">
+      <button id="logout" class="ghost" hidden>Log out</button>
+      <a class="back" href="/">Back to app</a>
+    </div>
   </header>
 
-  <main class="admin">
+  <div id="login-overlay" class="login-overlay">
+    <form id="login-form" class="login-card">
+      <h2>Administrator sign in</h2>
+      <p class="hint">Credentials are required each time you open this page.</p>
+      <label>Username
+        <input id="login-username" name="username" type="text" autocomplete="username" required />
+      </label>
+      <label>Password
+        <input id="login-password" name="password" type="password" autocomplete="current-password" required />
+      </label>
+      <button type="submit" class="primary">Sign in</button>
+      <p id="login-message" class="message"></p>
+    </form>
+  </div>
+
+  <main class="admin" id="admin-content" hidden>
     <form id="settings-form">
       <fieldset>
         <legend>Camera (RTSP)</legend>
@@ -65,6 +83,22 @@
     <section class="admin-section">
       <h2>Enrolled faces</h2>
       <ul id="faces-list" class="faces-list"></ul>
+    </section>
+
+    <section class="admin-section">
+      <div class="section-head">
+        <h2>Captured faces</h2>
+        <button id="refresh-captures" class="ghost">Refresh</button>
+      </div>
+      <p class="hint">Cropped images saved automatically as faces are detected.</p>
+      <div class="gallery-actions">
+        <button id="cap-select-all" class="ghost">Select all</button>
+        <button id="cap-clear-sel" class="ghost">Clear</button>
+        <button id="cap-download" class="ghost">Download selected</button>
+        <button id="cap-delete" class="ghost danger">Delete selected</button>
+      </div>
+      <div id="captures" class="gallery"></div>
+      <p id="captures-message" class="message"></p>
     </section>
   </main>
 

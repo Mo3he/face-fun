@@ -96,6 +96,8 @@ button:hover { border-color: var(--accent); }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 button.primary:hover { background: var(--accent-2); }
 button.ghost { background: transparent; }
+button.danger { border-color: var(--red); color: var(--red); }
+button.danger:hover { border-color: var(--red); background: rgba(224, 82, 74, 0.12); }
 
 .hint { color: var(--muted); font-size: 0.85rem; margin: 12px 0 0; }
 .hint code { background: var(--panel-2); padding: 2px 6px; border-radius: 4px; }
@@ -162,3 +164,35 @@ legend { padding: 0 8px; color: var(--accent); }
   padding: 8px 0; border-bottom: 1px solid var(--border);
 }
 .faces-list button { background: transparent; border-color: var(--red); color: var(--red); padding: 6px 10px; }
+
+.face-info { display: flex; align-items: center; gap: 12px; }
+.face-avatar {
+  width: 44px; height: 44px; border-radius: 50%; overflow: hidden;
+  flex: 0 0 44px; background: var(--panel-2); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+}
+.face-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.face-avatar.placeholder { color: var(--muted); font-weight: 600; font-size: 1.1rem; }
+
+.topbar-actions { display: flex; align-items: center; gap: 14px; }
+
+.section-head { display: flex; align-items: center; justify-content: space-between; }
+.section-head h2 { margin: 0; }
+
+/* Login overlay */
+.login-overlay {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(8, 10, 14, 0.92);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+/* `hidden` must win over the display:flex rule above. */
+.login-overlay[hidden] { display: none; }
+.login-card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 12px; padding: 26px; width: 100%; max-width: 360px;
+}
+.login-card h2 { margin: 0 0 6px; }
+.login-card label { display: block; color: var(--muted); margin: 14px 0 0; }
+.login-card label input { display: block; width: 100%; margin-top: 6px; }
+.login-card button { width: 100%; margin-top: 18px; }
+.admin .gallery a { display: block; }
