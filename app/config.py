@@ -41,6 +41,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "recognition_tolerance": float(os.environ.get("RECOGNITION_TOLERANCE", "0.6")),
     # Run recognition every N captured frames to keep CPU usage reasonable.
     "detect_every": int(os.environ.get("DETECT_EVERY", "5")),
+    # Retention caps (0 = keep everything). Oldest items are pruned past these.
+    "max_captures": int(os.environ.get("MAX_CAPTURES", "500")),
+    "max_photos": int(os.environ.get("MAX_PHOTOS", "200")),
 }
 
 # Keys that should never be sent back to the browser in clear text.

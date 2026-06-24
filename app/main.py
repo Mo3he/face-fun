@@ -21,7 +21,15 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from . import config
-from .auth import create_session, destroy_session, require_admin, verify_credentials
+from .auth import (
+    check_rate_limit,
+    create_session,
+    destroy_session,
+    record_failure,
+    require_admin,
+    reset_failures,
+    verify_credentials,
+)
 from .camera import Camera
 from .config import Settings
 from .database import Database
@@ -102,8 +110,12 @@ def status():
         "connected": camera.connected,
         "error": camera.last_error,
         "labels": camera.current_labels(),
-        "enrolled": database.list_faces(),
     }
+
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok", "camera_connected": camera.connected}
 
 
 # --------------------------------------------------------------------------
@@ -132,12 +144,23 @@ def take_photo():
     (config.PHOTOS_DIR / filename).write_bytes(jpeg)
     labels = ", ".join(sorted(set(camera.current_labels())))
     record = database.add_photo(filename, labels)
+    _prune_photos()
     return record
 
 
+def _prune_photos() -> None:
+    keep = int(settings.get("max_photos", 0))
+    if keep <= 0:
+        return
+    for filename in database.prune_photos(keep):
+        target = config.PHOTOS_DIR / Path(filename).name
+        if target.exists():
+            target.unlink()
+
+
 @app.get("/photos")
-def list_photos():
-    return database.list_photos()
+def list_photos(limit: int | None = None, offset: int = 0):
+    return database.list_photos(limit=limit, offset=max(0, offset))
 
 
 @app.get("/photos/{filename}")
@@ -191,9 +214,13 @@ def email_photos(recipient: str = Form(...), photo_ids: str = Form(...)):
 # Admin API (locked behind a session token)
 # --------------------------------------------------------------------------
 @app.post("/admin/login")
-def admin_login(username: str = Form(...), password: str = Form(...)):
+def admin_login(request: Request, username: str = Form(...), password: str = Form(...)):
+    ip = request.client.host if request.client else "unknown"
+    check_rate_limit(ip)
     if not verify_credentials(username, password):
+        record_failure(ip)
         raise HTTPException(status_code=401, detail="Invalid administrator credentials.")
+    reset_failures(ip)
     return {"ok": True, "token": create_session()}
 
 
@@ -249,7 +276,7 @@ def admin_list_faces(_: str = Depends(require_admin)):
 
 
 @app.get("/faces/image/{filename}")
-def get_face_image(filename: str):
+def get_face_image(filename: str, _: str = Depends(require_admin)):
     safe = Path(filename).name  # strip any path traversal
     path = config.FACES_DIR / safe
     if not path.exists():
@@ -261,8 +288,8 @@ def get_face_image(filename: str):
 # Captures (auto-saved cropped faces, managed from the admin tab)
 # --------------------------------------------------------------------------
 @app.get("/admin/captures")
-def admin_list_captures(_: str = Depends(require_admin)):
-    return database.list_captures()
+def admin_list_captures(limit: int | None = None, offset: int = 0, _: str = Depends(require_admin)):
+    return database.list_captures(limit=limit, offset=max(0, offset))
 
 
 @app.delete("/admin/captures/{capture_id}")
@@ -303,7 +330,7 @@ async def admin_download_captures(request: Request, _: str = Depends(require_adm
 
 
 @app.get("/captures/{filename}")
-def get_capture(filename: str):
+def get_capture(filename: str, _: str = Depends(require_admin)):
     safe = Path(filename).name  # strip any path traversal
     path = config.CAPTURES_DIR / safe
     if not path.exists():

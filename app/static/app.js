@@ -1,6 +1,8 @@
 "use strict";
 
 const selected = new Set();
+const GALLERY_PAGE = 60;
+let galleryOffset = 0;
 
 function showMessage(el, text, ok) {
   el.textContent = text;
@@ -72,11 +74,15 @@ document.getElementById("snap").addEventListener("click", async () => {
   }
 });
 
-async function loadGallery() {
-  const res = await fetch("/photos");
-  const photos = await res.json();
+async function loadGallery(reset = true) {
   const gallery = document.getElementById("gallery");
-  gallery.innerHTML = "";
+  const more = document.getElementById("load-more");
+  if (reset) {
+    galleryOffset = 0;
+    gallery.innerHTML = "";
+  }
+  const res = await fetch(`/photos?limit=${GALLERY_PAGE}&offset=${galleryOffset}`);
+  const photos = await res.json();
   photos.forEach((p) => {
     const div = document.createElement("div");
     div.className = "thumb" + (selected.has(p.id) ? " selected" : "");
@@ -100,6 +106,7 @@ async function loadGallery() {
     del.title = "Delete";
     del.addEventListener("click", async (ev) => {
       ev.stopPropagation();
+      if (!confirm("Delete this photo?")) return;
       await fetch(`/photos/${p.id}`, { method: "DELETE" });
       selected.delete(p.id);
       loadGallery();
@@ -114,7 +121,11 @@ async function loadGallery() {
 
     gallery.appendChild(div);
   });
+  galleryOffset += photos.length;
+  if (more) more.hidden = photos.length < GALLERY_PAGE;
 }
+
+document.getElementById("load-more").addEventListener("click", () => loadGallery(false));
 
 document.getElementById("select-all").addEventListener("click", () => {
   document.querySelectorAll(".thumb").forEach((t) => {

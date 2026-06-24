@@ -109,11 +109,14 @@ class Database:
             ).fetchone()
         return dict(row)
 
-    def list_photos(self) -> list[dict]:
+    def list_photos(self, limit: int | None = None, offset: int = 0) -> list[dict]:
+        query = "SELECT id, filename, labels, created_at FROM photos ORDER BY id DESC"
+        params: list = []
+        if limit is not None:
+            query += " LIMIT ? OFFSET ?"
+            params = [limit, offset]
         with self._lock:
-            rows = self._conn.execute(
-                "SELECT id, filename, labels, created_at FROM photos ORDER BY id DESC"
-            ).fetchall()
+            rows = self._conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
 
     def get_photos(self, ids: list[int]) -> list[dict]:
@@ -138,6 +141,25 @@ class Database:
             self._conn.commit()
         return row["filename"]
 
+    def prune_photos(self, keep: int) -> list[str]:
+        """Delete photos beyond the newest ``keep``. Returns removed filenames."""
+        if keep <= 0:
+            return []
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, filename FROM photos ORDER BY id DESC LIMIT -1 OFFSET ?",
+                (keep,),
+            ).fetchall()
+            if not rows:
+                return []
+            ids = [r["id"] for r in rows]
+            placeholders = ",".join("?" for _ in ids)
+            self._conn.execute(
+                f"DELETE FROM photos WHERE id IN ({placeholders})", ids
+            )
+            self._conn.commit()
+        return [r["filename"] for r in rows]
+
     # ---- captures (auto-saved cropped faces) ---------------------------
     def add_capture(self, filename: str, label: str) -> dict:
         with self._lock:
@@ -152,11 +174,14 @@ class Database:
             ).fetchone()
         return dict(row)
 
-    def list_captures(self) -> list[dict]:
+    def list_captures(self, limit: int | None = None, offset: int = 0) -> list[dict]:
+        query = "SELECT id, filename, label, created_at FROM captures ORDER BY id DESC"
+        params: list = []
+        if limit is not None:
+            query += " LIMIT ? OFFSET ?"
+            params = [limit, offset]
         with self._lock:
-            rows = self._conn.execute(
-                "SELECT id, filename, label, created_at FROM captures ORDER BY id DESC"
-            ).fetchall()
+            rows = self._conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
 
     def get_captures(self, ids: list[int]) -> list[dict]:
@@ -180,3 +205,22 @@ class Database:
             self._conn.execute("DELETE FROM captures WHERE id = ?", (capture_id,))
             self._conn.commit()
         return row["filename"]
+
+    def prune_captures(self, keep: int) -> list[str]:
+        """Delete captures beyond the newest ``keep``. Returns removed filenames."""
+        if keep <= 0:
+            return []
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, filename FROM captures ORDER BY id DESC LIMIT -1 OFFSET ?",
+                (keep,),
+            ).fetchall()
+            if not rows:
+                return []
+            ids = [r["id"] for r in rows]
+            placeholders = ",".join("?" for _ in ids)
+            self._conn.execute(
+                f"DELETE FROM captures WHERE id IN ({placeholders})", ids
+            )
+            self._conn.commit()
+        return [r["filename"] for r in rows]

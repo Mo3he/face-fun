@@ -121,7 +121,12 @@ Everything is stored under `/data` inside the container, mounted to the
 
 - `/data/facefun.db` - SQLite (enrolled faces + photo metadata)
 - `/data/photos/` - captured JPEGs
+- `/data/captures/` - auto-saved cropped faces (detected on the live stream)
+- `/data/faces/` - enrolled-face thumbnails
 - `/data/settings.json` - operator settings edited from the admin tab
+
+Captured faces and photos are pruned to the newest `Max captured faces` /
+`Max photos` set in the admin tab (0 = keep everything).
 
 ## Running locally without Docker
 
@@ -142,7 +147,8 @@ app/
   faces.py        In-memory encoding cache
   camera.py       RTSP capture + recognition worker
   email_utils.py  SMTP sending
-  auth.py         Admin HTTP Basic auth
+  auth.py         Admin session-token auth + login throttling
+  capture.py      Pure helper for de-duplicating auto-captured faces
   templates/      index.html, admin.html
   static/         style.css, app.js, admin.js
 Dockerfile
@@ -152,7 +158,15 @@ docker-compose.yml
 ## Security notes
 
 - Change `ADMIN_USERNAME` / `ADMIN_PASSWORD` before deploying.
-- Admin auth uses HTTP Basic, so put the app behind HTTPS (a reverse proxy) in
-  production so credentials aren't sent in clear text.
+- Admin access uses a short-lived session token: the `/admin` page asks for
+  credentials on every visit and never persists the token, and failed logins are
+  rate-limited per source address.
+- The app speaks plain HTTP, so put it behind HTTPS (a reverse proxy such as
+  Caddy, nginx or Traefik) in production so credentials, tokens and face images
+  aren't sent in clear text.
+- Enrolled-face thumbnails and auto-captured faces are served only to
+  authenticated admins; manual photos on the public page are not protected.
 - RTSP and SMTP credentials are stored in `settings.json` on the data volume;
   protect that volume accordingly.
+- A `GET /healthz` endpoint reports liveness and camera connectivity for
+  container health checks.

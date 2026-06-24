@@ -54,6 +54,16 @@
       </fieldset>
 
       <fieldset>
+        <legend>Storage retention</legend>
+        <label>Max captured faces to keep (0 = unlimited)
+          <input name="max_captures" type="number" step="1" min="0" />
+        </label>
+        <label>Max photos to keep (0 = unlimited)
+          <input name="max_photos" type="number" step="1" min="0" />
+        </label>
+      </fieldset>
+
+      <fieldset>
         <legend>Email (SMTP)</legend>
         <label>SMTP host <input name="smtp_host" type="text" placeholder="smtp.example.com" /></label>
         <label>SMTP port <input name="smtp_port" type="number" placeholder="587" /></label>
@@ -98,6 +108,9 @@
         <button id="cap-delete" class="ghost danger">Delete selected</button>
       </div>
       <div id="captures" class="gallery"></div>
+      <div class="row">
+        <button id="cap-load-more" class="ghost" hidden>Load more</button>
+      </div>
       <p id="captures-message" class="message"></p>
     </section>
   </main>

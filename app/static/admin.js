@@ -147,7 +147,7 @@ async function loadFaces() {
     avatar.className = "face-avatar";
     if (f.image) {
       const img = document.createElement("img");
-      img.src = `/faces/image/${f.image}`;
+      img.src = `/faces/image/${f.image}?token=${encodeURIComponent(token)}`;
       img.alt = f.name;
       avatar.appendChild(img);
     } else {
@@ -163,6 +163,7 @@ async function loadFaces() {
     const btn = document.createElement("button");
     btn.textContent = "Delete";
     btn.addEventListener("click", async () => {
+      if (!confirm(`Delete enrolled face "${f.name}"?`)) return;
       await authedFetch(`/admin/faces/${f.id}`, { method: "DELETE" });
       loadFaces();
     });
@@ -178,60 +179,68 @@ async function loadFaces() {
 
 // ---- captured faces -------------------------------------------------
 const capSelected = new Set();
+const CAP_PAGE = 60;
+let capOffset = 0;
 
-async function loadCaptures() {
-  const res = await authedFetch("/admin/captures");
-  if (!res.ok) return;
-  const captures = await res.json();
-  const gallery = document.getElementById("captures");
-  gallery.innerHTML = "";
-  // Drop selections for captures that no longer exist.
-  const present = new Set(captures.map((c) => c.id));
-  capSelected.forEach((id) => {
-    if (!present.has(id)) capSelected.delete(id);
+function renderCapture(c, gallery) {
+  const div = document.createElement("div");
+  div.className = "thumb" + (capSelected.has(c.id) ? " selected" : "");
+  div.dataset.id = c.id;
+
+  const img = document.createElement("img");
+  img.src = `/captures/${c.filename}?token=${encodeURIComponent(token)}`;
+  img.alt = c.label || "face";
+  div.appendChild(img);
+
+  const labels = document.createElement("div");
+  labels.className = "labels";
+  labels.textContent = `${c.label || "Unknown"} - ${c.created_at}`;
+  div.appendChild(labels);
+
+  const del = document.createElement("button");
+  del.className = "del";
+  del.textContent = "\u00d7";
+  del.title = "Delete";
+  del.addEventListener("click", async (ev) => {
+    ev.stopPropagation();
+    if (!confirm("Delete this capture?")) return;
+    await authedFetch(`/admin/captures/${c.id}`, { method: "DELETE" });
+    capSelected.delete(c.id);
+    loadCaptures();
   });
-  if (captures.length === 0) {
-    gallery.innerHTML = '<p class="hint">No captures yet.</p>';
-    return;
-  }
-  captures.forEach((c) => {
-    const div = document.createElement("div");
-    div.className = "thumb" + (capSelected.has(c.id) ? " selected" : "");
-    div.dataset.id = c.id;
+  div.appendChild(del);
 
-    const img = document.createElement("img");
-    img.src = `/captures/${c.filename}`;
-    img.alt = c.label || "face";
-    div.appendChild(img);
-
-    const labels = document.createElement("div");
-    labels.className = "labels";
-    labels.textContent = `${c.label || "Unknown"} - ${c.created_at}`;
-    div.appendChild(labels);
-
-    const del = document.createElement("button");
-    del.className = "del";
-    del.textContent = "\u00d7";
-    del.title = "Delete";
-    del.addEventListener("click", async (ev) => {
-      ev.stopPropagation();
-      await authedFetch(`/admin/captures/${c.id}`, { method: "DELETE" });
-      capSelected.delete(c.id);
-      loadCaptures();
-    });
-    div.appendChild(del);
-
-    div.addEventListener("click", () => {
-      if (capSelected.has(c.id)) capSelected.delete(c.id);
-      else capSelected.add(c.id);
-      div.classList.toggle("selected");
-    });
-
-    gallery.appendChild(div);
+  div.addEventListener("click", () => {
+    if (capSelected.has(c.id)) capSelected.delete(c.id);
+    else capSelected.add(c.id);
+    div.classList.toggle("selected");
   });
+
+  gallery.appendChild(div);
 }
 
-document.getElementById("refresh-captures").addEventListener("click", loadCaptures);
+async function loadCaptures(reset = true) {
+  const gallery = document.getElementById("captures");
+  const more = document.getElementById("cap-load-more");
+  if (reset) {
+    capOffset = 0;
+    gallery.innerHTML = "";
+  }
+  const res = await authedFetch(`/admin/captures?limit=${CAP_PAGE}&offset=${capOffset}`);
+  if (!res.ok) return;
+  const captures = await res.json();
+  if (reset && captures.length === 0) {
+    gallery.innerHTML = '<p class="hint">No captures yet.</p>';
+    more.hidden = true;
+    return;
+  }
+  captures.forEach((c) => renderCapture(c, gallery));
+  capOffset += captures.length;
+  more.hidden = captures.length < CAP_PAGE;
+}
+
+document.getElementById("refresh-captures").addEventListener("click", () => loadCaptures());
+document.getElementById("cap-load-more").addEventListener("click", () => loadCaptures(false));
 
 document.getElementById("cap-select-all").addEventListener("click", () => {
   document.querySelectorAll("#captures .thumb").forEach((t) => {
@@ -283,6 +292,7 @@ document.getElementById("cap-delete").addEventListener("click", async () => {
     return;
   }
   const ids = Array.from(capSelected);
+  if (!confirm(`Delete ${ids.length} selected capture(s)?`)) return;
   try {
     await Promise.all(
       ids.map((id) => authedFetch(`/admin/captures/${id}`, { method: "DELETE" }))

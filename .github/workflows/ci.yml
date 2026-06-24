@@ -24,3 +24,22 @@ jobs:
         run: |
           pip install ruff
           ruff check app
+
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install light test deps
+        # Only the lightweight deps the tests touch; the full stack (dlib,
+        # opencv, face_recognition) is not needed and would be slow to build.
+        run: pip install pytest numpy fastapi
+
+      - name: Run tests
+        run: pytest -q
+

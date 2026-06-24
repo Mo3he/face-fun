@@ -11,12 +11,14 @@ from __future__ import annotations
 import threading
 import time
 import uuid
+from pathlib import Path
 
 import cv2
 import face_recognition
 import numpy as np
 
 from . import config
+from .capture import dedup_new_faces
 from .config import Settings
 from .database import Database
 from .faces import FaceStore, recognition_lock
@@ -25,9 +27,13 @@ from .faces import FaceStore, recognition_lock
 # good speed/accuracy trade-off for typical RTSP resolutions.
 DETECT_SCALE = 0.25
 
-# Minimum seconds between auto-saved crops of the same label, so a face that
+# Minimum seconds before the same face can be auto-saved again, so a face that
 # lingers in view does not flood the captures gallery.
 CAPTURE_COOLDOWN = 30.0
+
+# Max face-encoding distance for two detections to count as the same person when
+# deduplicating captures (mirrors the recognition default).
+CAPTURE_DEDUP_TOLERANCE = 0.6
 
 
 class Detection:
@@ -49,10 +55,9 @@ class Camera:
         self._running = False
         self._thread: threading.Thread | None = None
         self._generation = 0  # bumped on restart so the loop reconnects
-        # Auto-capture bookkeeping: labels present in the previous detection
-        # cycle and the last time each label was saved.
-        self._prev_labels: set[str] = set()
-        self._last_capture: dict[str, float] = {}
+        # Auto-capture bookkeeping: recently saved face encodings with the last
+        # time each was seen, used to avoid re-saving the same person.
+        self._recent_captures: list[tuple[np.ndarray, float]] = []
         self.connected = False
         self.last_error = ""
 
@@ -120,8 +125,8 @@ class Camera:
 
             detect_every = max(1, int(self._settings.get("detect_every", 5)))
             if frame_index % detect_every == 0:
-                self._detections = self._detect(frame)
-                self._maybe_capture(frame, self._detections)
+                self._detections, encodings = self._detect(frame)
+                self._maybe_capture(frame, self._detections, encodings)
             frame_index += 1
 
             annotated = self._annotate(frame, self._detections)
@@ -131,7 +136,7 @@ class Camera:
                     self._jpeg = buffer.tobytes()
                     self._raw = frame
 
-    def _detect(self, frame: np.ndarray) -> list[Detection]:
+    def _detect(self, frame: np.ndarray) -> tuple[list[Detection], list[np.ndarray]]:
         tolerance = float(self._settings.get("recognition_tolerance", 0.6))
         small = cv2.resize(frame, (0, 0), fx=DETECT_SCALE, fy=DETECT_SCALE)
         rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
@@ -151,7 +156,7 @@ class Camera:
                     name,
                 )
             )
-        return results
+        return results, list(encodings)
 
     @staticmethod
     def _annotate(frame: np.ndarray, detections: list[Detection]) -> np.ndarray:
@@ -198,18 +203,24 @@ class Camera:
         crop = frame[top:bottom, left:right]
         return crop if crop.size else None
 
-    def _maybe_capture(self, frame: np.ndarray, detections: list["Detection"]) -> None:
-        """Save a cropped image when a face newly appears in view."""
+    def _maybe_capture(
+        self,
+        frame: np.ndarray,
+        detections: list["Detection"],
+        encodings: list[np.ndarray],
+    ) -> None:
+        """Save a cropped image when a genuinely new face appears in view."""
+        if not detections:
+            return
         now = time.time()
-        current = {d.name for d in detections}
-        new_labels = current - self._prev_labels
-        self._prev_labels = current
-        for d in detections:
-            if d.name not in new_labels:
-                continue
-            last = self._last_capture.get(d.name, 0.0)
-            if now - last < CAPTURE_COOLDOWN:
-                continue
+        new_indices = dedup_new_faces(
+            self._recent_captures, encodings, now, CAPTURE_COOLDOWN, CAPTURE_DEDUP_TOLERANCE
+        )
+        if not new_indices:
+            return
+        saved = False
+        for i in new_indices:
+            d = detections[i]
             crop = self._crop_face(frame, d)
             if crop is None:
                 continue
@@ -220,9 +231,24 @@ class Camera:
             try:
                 (config.CAPTURES_DIR / filename).write_bytes(buffer.tobytes())
                 self._database.add_capture(filename, d.name)
+                saved = True
             except OSError:
                 continue
-            self._last_capture[d.name] = now
+        if saved:
+            self._prune_captures()
+
+    def _prune_captures(self) -> None:
+        """Delete the oldest captures past the configured retention limit."""
+        keep = int(self._settings.get("max_captures", 0))
+        if keep <= 0:
+            return
+        for filename in self._database.prune_captures(keep):
+            target = config.CAPTURES_DIR / Path(filename).name
+            try:
+                if target.exists():
+                    target.unlink()
+            except OSError:
+                continue
 
     # ---- consumers -----------------------------------------------------
     def get_jpeg(self) -> bytes | None:
