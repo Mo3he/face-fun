@@ -18,6 +18,7 @@ import face_recognition
 import numpy as np
 
 from . import config
+from .accessories import ACCESSORIES, draw_accessories
 from .capture import dedup_new_faces
 from .config import Settings
 from .database import Database
@@ -37,10 +38,12 @@ CAPTURE_DEDUP_TOLERANCE = 0.6
 
 
 class Detection:
-    __slots__ = ("top", "right", "bottom", "left", "name")
+    __slots__ = ("top", "right", "bottom", "left", "name", "landmarks")
 
-    def __init__(self, top: int, right: int, bottom: int, left: int, name: str):
+    def __init__(self, top: int, right: int, bottom: int, left: int, name: str,
+                 landmarks: dict | None = None):
         self.top, self.right, self.bottom, self.left, self.name = top, right, bottom, left, name
+        self.landmarks = landmarks
 
 
 class Camera:
@@ -138,14 +141,20 @@ class Camera:
 
     def _detect(self, frame: np.ndarray) -> tuple[list[Detection], list[np.ndarray]]:
         tolerance = float(self._settings.get("recognition_tolerance", 0.6))
+        want_landmarks = self._accessories_active()
         small = cv2.resize(frame, (0, 0), fx=DETECT_SCALE, fy=DETECT_SCALE)
         rgb = cv2.cvtColor(small, cv2.COLOR_BGR2RGB)
         with recognition_lock:
             locations = face_recognition.face_locations(rgb)
             encodings = face_recognition.face_encodings(rgb, locations)
+            landmarks = (
+                face_recognition.face_landmarks(rgb, locations)
+                if want_landmarks and locations
+                else [None] * len(locations)
+            )
         results: list[Detection] = []
         inv = 1.0 / DETECT_SCALE
-        for (top, right, bottom, left), encoding in zip(locations, encodings):
+        for (top, right, bottom, left), encoding, marks in zip(locations, encodings, landmarks):
             name = self._faces.identify(encoding, tolerance)
             results.append(
                 Detection(
@@ -154,12 +163,32 @@ class Camera:
                     int(bottom * inv),
                     int(left * inv),
                     name,
+                    self._scale_landmarks(marks, inv),
                 )
             )
         return results, list(encodings)
 
     @staticmethod
-    def _annotate(frame: np.ndarray, detections: list[Detection]) -> np.ndarray:
+    def _scale_landmarks(marks: dict | None, inv: float) -> dict | None:
+        """Scale landmark points from the downscaled detection space back up."""
+        if not marks:
+            return None
+        return {
+            feature: [(int(x * inv), int(y * inv)) for (x, y) in points]
+            for feature, points in marks.items()
+        }
+
+    def _accessories_active(self) -> bool:
+        if not self._settings.get("accessories_enabled", False):
+            return False
+        return any(self._settings.get(f"acc_{name}", False) for name in ACCESSORIES)
+
+    def _accessory_options(self) -> dict:
+        if not self._settings.get("accessories_enabled", False):
+            return {}
+        return {name: bool(self._settings.get(f"acc_{name}", False)) for name in ACCESSORIES}
+
+    def _annotate(self, frame: np.ndarray, detections: list[Detection]) -> np.ndarray:
         out = frame.copy()
         for d in detections:
             known = d.name != "Unknown"
@@ -177,6 +206,7 @@ class Camera:
                 (255, 255, 255),
                 2,
             )
+        draw_accessories(out, detections, self._accessory_options())
         return out
 
     def _set_placeholder(self, message: str) -> None:

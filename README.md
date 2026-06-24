@@ -17,6 +17,8 @@ runs in a Docker container.
 - Enroll a face by typing a name and clicking **Enroll my face**
 - Real-time recognition; unrecognized faces are labelled **Unknown**
 - Capture photos (stored on a Docker volume)
+- Overlay fun accessories (glasses, hat, mustache, beard, makeup) on detected
+  faces, toggled from the admin tab
 - Email selected photos to a user-supplied address via SMTP
 - Admin-only settings tab protected by HTTP Basic auth
 - SQLite + filesystem persistence on a Docker volume
@@ -149,6 +151,7 @@ app/
   email_utils.py  SMTP sending
   auth.py         Admin session-token auth + login throttling
   capture.py      Pure helper for de-duplicating auto-captured faces
+  accessories.py  Procedural face overlays (glasses, hat, beard, ...)
   templates/      index.html, admin.html
   static/         style.css, app.js, admin.js
 Dockerfile

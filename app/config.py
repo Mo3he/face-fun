@@ -44,6 +44,14 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # Retention caps (0 = keep everything). Oldest items are pruned past these.
     "max_captures": int(os.environ.get("MAX_CAPTURES", "500")),
     "max_photos": int(os.environ.get("MAX_PHOTOS", "200")),
+    # Fun accessories overlaid on detected faces in the live stream. The master
+    # switch gates the per-accessory toggles below.
+    "accessories_enabled": os.environ.get("ACCESSORIES_ENABLED", "false").lower() == "true",
+    "acc_glasses": os.environ.get("ACC_GLASSES", "false").lower() == "true",
+    "acc_hat": os.environ.get("ACC_HAT", "false").lower() == "true",
+    "acc_mustache": os.environ.get("ACC_MUSTACHE", "false").lower() == "true",
+    "acc_beard": os.environ.get("ACC_BEARD", "false").lower() == "true",
+    "acc_makeup": os.environ.get("ACC_MAKEUP", "false").lower() == "true",
 }
 
 # Keys that should never be sent back to the browser in clear text.
