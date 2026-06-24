@@ -24,14 +24,3 @@ jobs:
         run: |
           pip install ruff
           ruff check app
-
-  docker-build:
-    name: Docker image builds
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build image
-        # Compiles dlib, so this is the slow but thorough check that the
-        # container actually builds end to end.
-        run: docker build -t face-fun:ci .

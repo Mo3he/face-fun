@@ -1,5 +1,9 @@
 services:
   face-fun:
+    # Use the prebuilt image published to GHCR. Run `docker compose pull` to
+    # fetch it without building. To build locally instead, run
+    # `docker compose up --build` (the build section below is used then).
+    image: ghcr.io/mo3he/face-fun:latest
     build: .
     ports:
       - "8000:8000"

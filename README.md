@@ -21,18 +21,40 @@ runs in a Docker container.
 - Admin-only settings tab protected by HTTP Basic auth
 - SQLite + filesystem persistence on a Docker volume
 
-## Quick start
+## Quick start (prebuilt image, no build)
+
+A multi-arch image (amd64 + arm64) is published to GitHub Container Registry, so
+you can run Face Fun without compiling anything:
+
+```bash
+docker run -d --name face-fun \
+  -p 8000:8000 \
+  -e ADMIN_USERNAME=admin \
+  -e ADMIN_PASSWORD=change-me \
+  -v facefun-data:/data \
+  ghcr.io/mo3he/face-fun:latest
+```
+
+Or with Docker Compose (pulls the published image instead of building):
+
+```bash
+cp .env.example .env   # set at least ADMIN_USERNAME / ADMIN_PASSWORD
+docker compose pull
+docker compose up -d
+```
+
+Then open:
+
+- App: http://localhost:8000
+- Admin: http://localhost:8000/admin (use your admin credentials)
+
+## Build it yourself
 
 ```bash
 cp .env.example .env
 # edit .env and set at least ADMIN_USERNAME / ADMIN_PASSWORD
 docker compose up --build
 ```
-
-Then open:
-
-- App: http://localhost:8000
-- Admin: http://localhost:8000/admin (use the admin credentials from `.env`)
 
 > The first build compiles `dlib`, so it takes a few minutes.
 
