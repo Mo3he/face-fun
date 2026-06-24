@@ -18,7 +18,7 @@ runs in a Docker container.
 - Real-time recognition; unrecognized faces are labelled **Unknown**
 - Capture photos (stored on a Docker volume)
 - Overlay fun accessories (glasses, hat, mustache, beard, makeup) on detected
-  faces, toggled from the admin tab
+  faces, toggled by anyone from the main page
 - Email selected photos to a user-supplied address via SMTP
 - Admin-only settings tab protected by HTTP Basic auth
 - SQLite + filesystem persistence on a Docker volume

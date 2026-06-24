@@ -159,6 +159,50 @@ document.getElementById("email-form").addEventListener("submit", async (e) => {
   }
 });
 
+// ---- accessories ----------------------------------------------------
+const accEnabled = document.getElementById("acc-enabled");
+const accOptions = document.getElementById("acc-options");
+const accInputs = Array.from(accOptions.querySelectorAll("input[data-acc]"));
+
+function applyAccessoryState(state) {
+  accEnabled.checked = Boolean(state.accessories_enabled);
+  accInputs.forEach((input) => {
+    input.checked = Boolean(state[input.dataset.acc]);
+  });
+  accOptions.classList.toggle("disabled", !accEnabled.checked);
+}
+
+async function loadAccessories() {
+  try {
+    const res = await fetch("/accessories");
+    if (res.ok) applyAccessoryState(await res.json());
+  } catch (e) {
+    /* ignore: cosmetic only */
+  }
+}
+
+async function saveAccessories() {
+  const payload = { accessories_enabled: accEnabled.checked };
+  accInputs.forEach((input) => {
+    payload[input.dataset.acc] = input.checked;
+  });
+  accOptions.classList.toggle("disabled", !accEnabled.checked);
+  try {
+    const res = await fetch("/accessories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) applyAccessoryState(await res.json());
+  } catch (e) {
+    /* ignore: cosmetic only */
+  }
+}
+
+accEnabled.addEventListener("change", saveAccessories);
+accInputs.forEach((input) => input.addEventListener("change", saveAccessories));
+
 pollStatus();
 setInterval(pollStatus, 1500);
 loadGallery();
+loadAccessories();

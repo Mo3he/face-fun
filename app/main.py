@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from . import config
+from .accessories import ACCESSORIES
 from .auth import (
     check_rate_limit,
     create_session,
@@ -45,6 +46,9 @@ camera = Camera(settings, face_store, database)
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9 _\-]")
+
+# Accessory toggles users may change from the public page (cosmetic only).
+ACCESSORY_KEYS = {"accessories_enabled", *(f"acc_{name}" for name in ACCESSORIES)}
 
 
 @asynccontextmanager
@@ -116,6 +120,34 @@ def status():
 @app.get("/healthz")
 def healthz():
     return {"status": "ok", "camera_connected": camera.connected}
+
+
+# --------------------------------------------------------------------------
+# Accessories (public: any viewer can change what the stream overlays)
+# --------------------------------------------------------------------------
+def _accessory_state() -> dict:
+    s = settings.all()
+    return {key: bool(s.get(key, False)) for key in ACCESSORY_KEYS}
+
+
+@app.get("/accessories")
+def get_accessories():
+    return _accessory_state()
+
+
+@app.post("/accessories")
+async def update_accessories(request: Request):
+    try:
+        payload = await request.json()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid request body.")
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Invalid request body.")
+    # Only the cosmetic accessory keys are accepted here; everything else is
+    # ignored so this public endpoint can't touch camera or SMTP settings.
+    changes = {k: bool(v) for k, v in payload.items() if k in ACCESSORY_KEYS}
+    settings.update(changes)
+    return _accessory_state()
 
 
 # --------------------------------------------------------------------------

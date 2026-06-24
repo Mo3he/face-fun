@@ -102,6 +102,19 @@ button.danger:hover { border-color: var(--red); background: rgba(224, 82, 74, 0.
 .hint { color: var(--muted); font-size: 0.85rem; margin: 12px 0 0; }
 .hint code { background: var(--panel-2); padding: 2px 6px; border-radius: 4px; }
 
+.accessories {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.accessories label.checkbox { display: inline-flex; align-items: center; gap: 6px; }
+.accessories label.checkbox input { width: auto; }
+.accessories-toggle { margin-bottom: 8px; }
+.accessories-options { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.accessories-options.disabled { opacity: 0.45; pointer-events: none; }
+
 .message { min-height: 1.2em; margin: 10px 0 0; font-size: 0.9rem; }
 .message.ok { color: var(--green); }
 .message.err { color: var(--red); }
