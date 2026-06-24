@@ -48,12 +48,40 @@ Then open:
 - App: http://localhost:8000
 - Admin: http://localhost:8000/admin (use your admin credentials)
 
+## Running with Podman
+
+The same image works with Podman. Run the prebuilt image:
+
+```bash
+podman run -d --name face-fun \
+  -p 8000:8000 \
+  -e ADMIN_USERNAME=admin \
+  -e ADMIN_PASSWORD=change-me \
+  -v facefun-data:/data \
+  ghcr.io/mo3he/face-fun:latest
+```
+
+Or with `podman-compose`:
+
+```bash
+podman-compose pull
+podman-compose up -d
+```
+
+Notes:
+
+- On macOS, start the Podman VM first: `podman machine start`.
+- If the GHCR package is private, log in first:
+  `podman login ghcr.io -u <github-user>` (token needs `read:packages`).
+- After rebuilding locally, use `podman-compose up -d --force-recreate` so the
+  new image is actually used.
+
 ## Build it yourself
 
 ```bash
 cp .env.example .env
 # edit .env and set at least ADMIN_USERNAME / ADMIN_PASSWORD
-docker compose up --build
+docker compose up --build      # or: podman-compose up -d --build
 ```
 
 > The first build compiles `dlib`, so it takes a few minutes.
