@@ -14,7 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE: ghcr.io/${{ github.repository }}
+  # GHCR requires a lowercase image reference; github.repository is "Mo3he/...".
+  IMAGE: ghcr.io/mo3he/face-fun
 
 jobs:
   build:
